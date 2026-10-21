@@ -1,0 +1,53 @@
+name: Nasazení na GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # Volitelné: konfigurace Firebase z GitHub Secret místo commitu do repozitáře.
+      # Secret FIREBASE_CONFIG obsahuje čistý JSON objekt firebaseConfig (viz docs/FIREBASE.md).
+      - name: Vložit konfiguraci Firebase ze secretu
+        env:
+          FIREBASE_CONFIG: ${{ secrets.FIREBASE_CONFIG }}
+        run: |
+          if [ -z "$FIREBASE_CONFIG" ]; then echo "Secret FIREBASE_CONFIG není nastaven, používá se js/firebase-config.js z repozitáře."; exit 0; fi
+          echo "$FIREBASE_CONFIG" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{JSON.parse(s)})' \
+            || { echo "::error::Secret FIREBASE_CONFIG není platný JSON"; exit 1; }
+          printf 'window.FIREBASE_CONFIG = %s;\n' "$FIREBASE_CONFIG" > js/firebase-config.js
+          echo "Konfigurace Firebase vložena ze secretu."
+
+      # Telefon jinak může držet starý app.js z mezipaměti. Každé nasazení dostane
+      # vlastní ?v=<commit> u skriptů a stylu a číslo sestavení v Nastavení.
+      - name: Označit soubory verzí
+        run: |
+          v="${GITHUB_SHA::7}"
+          sed -i -E "s#(src=\"js/[a-z-]+\.js)\"#\1?v=$v\"#; s#(href=\"css/style\.css)\"#\1?v=$v\"#; s#__BUILD__#$v#" index.html
+          grep -n "?v=$v" index.html
+
+      - uses: actions/configure-pages@v5
+        with:
+          enablement: true
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+      - id: deployment
+        uses: actions/deploy-pages@v4
