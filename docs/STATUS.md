@@ -12,6 +12,6 @@ Stav k 21. 10. 2026.
 
 1. ~~GitHub Pages~~ hotovo, běží na https://czechvar.github.io/body-recovery/
 2. **Firebase**: zkontrolovat, že pravidla z `database.rules.json` jsou publikovaná, a v appce Nastavení → Nahrát plán do databáze.
-3. Volitelně **upozornění**: vlastní VAPID pár (`tools/vapid.html`), veřejný klíč do `js/push.js`,
-   secrets `VAPID_PRIVATE_KEY` a `FIREBASE_SERVICE_ACCOUNT` podle [NOTIFICATIONS.md](NOTIFICATIONS.md). Funguje jen s Firebase.
+3. **Upozornění**: veřejný VAPID klíč je v `js/push.js`. Zbývají secrets `VAPID_PRIVATE_KEY` a
+   `FIREBASE_SERVICE_ACCOUNT` podle [NOTIFICATIONS.md](NOTIFICATIONS.md), pak Actions → Upozornění → Run workflow.
 4. Na telefonu přidat appku na plochu (Android Chrome ⋮ → Instalovat aplikaci; iPhone Safari → Sdílet → Přidat na plochu).
