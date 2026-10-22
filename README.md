@@ -1,6 +1,6 @@
 # Tělo zpět
 
-Malá webová aplikace na trénink celého těla doma s jednoručkami, **10–15 minut denně**. Sestrojená podle [Šlacha zpět](https://github.com/czechvar/ankle-recovery): stejné obrazovky, stejné úložiště, jiný plán. Jeden cvičí a zapisuje, druhý (volitelně) sleduje a fandí.
+Malá webová aplikace na trénink celého těla doma s jednoručkami, **10–15 minut denně**. Sestrojená podle [Šlacha zpět](https://github.com/czechvar/ankle-recovery): stejné obrazovky, stejné úložiště, jiný plán. Jeden cvičí a zapisuje, ostatní (volitelně) sledují a fandí. Fanoušků může být víc, každý si na svém telefonu nastaví jméno.
 
 - **Přehled** – splněné tréninky v týdnu, dny v řadě, série týdnů, bolest, fáze plánu, milníky, co je dnes na řadě.
 - **Trénink** – 8týdenní plán ve třech fázích, každý týden tři krátké sestavy na střídání (**A** síla: dřep, tlak, přítah · **B** pohyblivost a střed těla · **C** síla: předklon, výpad, tlak nad hlavu). Appka sama nabídne sestavu, která je na řadě. Zápis sérií a **vah v kg** (s nápovědou „minule X kg“), **časovač** u cviků na čas, **pauza** mezi sériemi, bolest 0–10, svalovka, pocit, poznámka.
@@ -36,7 +36,7 @@ Bez Firebase appka ukládá data jen v prohlížeči telefonu, což pro jednoho 
 
 Po zapnutí: Nastavení → **Nahrát plán do databáze**, a odkaz pro parťáka zkopíruj tamtéž.
 
-Data: `pairs/<kód>/{profile, plan, sessions/<id>, messages/<id>, reactions/<sessionId>/<id>, everyday/<datum>}`. Trénink nese `day` (A/B/C) a u cviků `{ sets, kg? }`.
+Data: `pairs/<kód>/{profile, plan, sessions/<id>, messages/<id>, reactions/<sessionId>/<id>, everyday/<datum>}`. Trénink nese `day` (A/B/C) a u cviků `{ sets, kg? }`. Vzkazy a reakce fanoušků nesou `by` (id telefonu) a `name`.
 
 ## Struktura
 

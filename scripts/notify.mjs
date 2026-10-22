@@ -71,13 +71,13 @@ export function planPair(code, pair, now) {
 
   Object.entries(pair.messages || {}).filter(([, m]) => fresh(m)).forEach(([id, m]) => {
     const target = m.from === "partner" ? "patient" : "partner";
-    to(target, "messages", { title: `${name(m.from)} píše`, body: clip(m.text, 160), tag: `m-${id}`, url: "./?tab=cheer" });
+    to(target, "messages", { title: `${m.name || name(m.from)} píše`, body: clip(m.text, 160), tag: `m-${id}`, url: "./?tab=cheer" });
   });
 
   Object.entries(pair.reactions || {}).forEach(([sid, rs]) => Object.entries(rs || {}).filter(([, r]) => fresh(r)).forEach(([id, r]) => {
     const target = r.from === "partner" ? "patient" : "partner";
     const s = sessions[sid];
-    to(target, "reactions", { title: `${name(r.from)} reaguje ${r.emoji || ""}`.trim(), body: s ? `Na trénink ${fmtDate(s.date)}` : "Na trénink", tag: `r-${id}`, url: "./?tab=history" });
+    to(target, "reactions", { title: `${r.name || name(r.from)} reaguje ${r.emoji || ""}`.trim(), body: s ? `Na trénink ${fmtDate(s.date)}` : "Na trénink", tag: `r-${id}`, url: "./?tab=history" });
   }));
 
   // Připomínka: v nastavený den a hodinu, když dnes ještě nebyl trénink a týden není splněný.

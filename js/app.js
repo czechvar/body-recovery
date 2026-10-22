@@ -44,7 +44,8 @@
     showAllEx: false,
     showSteps: LS.get("showSteps", true),
     timer: null,                           // { ex, total, left, sets, endsAt, draft }
-    lastSeenMsg: LS.get("lastSeenMsg", 0)
+    lastSeenMsg: LS.get("lastSeenMsg", 0),
+    fanName: LS.get("fanName", "")          // jméno fanouška na tomto telefonu
   };
 
   /* ---------- plán ---------- */
@@ -85,6 +86,14 @@
   const her = () => profile().patientName || "parťák";
   const him = () => profile().partnerName || "fanoušek";
   const isPartner = () => state.role === "partner";
+  // Fanoušků může být víc. Každý telefon v roli „Fandím“ má vlastní id a jméno, které nesou jeho vzkazy a reakce.
+  function fanId() { let id = LS.get("fanId", null); if (!id) { id = Math.random().toString(36).slice(2, 10); LS.set("fanId", id); } return id; }
+  const fanLabel = x => x.name || him();
+  const author = x => x.from === "partner" ? fanLabel(x) : her();
+  // Starší zápisy bez `by` patří celé roli.
+  const isMine = x => x.from === state.role && (!isPartner() || !x.by || x.by === fanId());
+  const signed = () => isPartner() ? { by: fanId(), ...(state.fanName ? { name: state.fanName } : {}) } : {};
+  function fans() { const rs = Object.values(state.data.reactions || {}).flatMap(o => Object.values(o || {})); return [...new Set([...messages(), ...rs].filter(x => x && x.from === "partner").map(fanLabel))]; }
   const pushCtx = () => ({ store, base: BASE, role: state.role, cloud: store.mode === "cloud", profile, subs: () => (state.data.push && state.data.push.subs) || {}, esc, toast, render, isPartner });
 
   /* ---------- výpočty ---------- */
@@ -161,12 +170,12 @@
   const view = $("#view");
   function render() {
     document.querySelectorAll(".tab").forEach(t => t.classList.toggle("on", t.dataset.tab === state.tab));
-    $("#role-pill").textContent = state.role ? (isPartner() ? `Fandím: ${him()}` : `Cvičím: ${her()}`) : "Kdo jsi?";
+    $("#role-pill").textContent = state.role ? (isPartner() ? `Fandím: ${state.fanName || him()}` : `Cvičím: ${her()}`) : "Kdo jsi?";
     const sp = $("#sync-pill");
     if (store.mode === "cloud") { sp.textContent = state.connected ? "Sdíleno" : "Offline"; sp.className = "pill " + (state.connected ? "pill-ok" : "pill-off"); }
     else { sp.textContent = "Lokálně"; sp.title = "Data jen v tomto prohlížeči"; sp.className = "pill pill-muted"; }
 
-    const unseen = messages().filter(m => m.createdAt > state.lastSeenMsg && m.from !== state.role).length;
+    const unseen = messages().filter(m => m.createdAt > state.lastSeenMsg && !isMine(m)).length;
     const badge = $("#cheer-badge"); badge.hidden = !unseen || state.tab === "cheer"; badge.textContent = unseen;
 
     if (!state.role) { view.innerHTML = renderChooser(); bind(); return; }
@@ -216,8 +225,11 @@
       ${!isPartner() ? `<button class="linkbtn" id="log-other-day" type="button">Doplnit trénink za jiný den</button>` : ""}
       ${isPartner() ? `<button class="btn btn-primary btn-block" data-go="cheer" type="button">Napsat povzbuzení</button>` : ""}
     </section>
+    ${isPartner() && !state.fanName ? `<section class="section card" style="display:grid;gap:10px"><h2>Jak ti říkat?</h2>
+      <p class="small muted">${esc(her())} uvidí u vzkazů a reakcí tvoje jméno. Fanoušků může být víc, každý má svoje.</p>
+      <div class="row"><input type="text" id="fan-name" maxlength="40" placeholder="Tvoje jméno"><button class="btn btn-primary" id="save-fan" type="button">Uložit</button></div></section>` : ""}
 
-    ${!isPartner() && lastMsg ? `<section class="section"><div class="msg partner" style="max-width:100%"><div>${esc(lastMsg.text)}</div><div class="meta">${esc(him())} · ${fmtTime(lastMsg.createdAt)}</div></div></section>` : ""}
+    ${!isPartner() && lastMsg ? `<section class="section"><div class="msg partner" style="max-width:100%"><div>${esc(lastMsg.text)}</div><div class="meta">${esc(fanLabel(lastMsg))} · ${fmtTime(lastMsg.createdAt)}</div></div></section>` : ""}
 
     <section class="section">
       <div class="stats">
@@ -484,7 +496,8 @@
       const site = /strava/i.test(link) ? "Strava" : /garmin/i.test(link) ? "Garmin" : /suunto/i.test(link) ? "Suunto" : "Aktivita";
       const jokerChips = SJ ? `<span class="chip ok">${esc(SJ.icon || "")} ${esc(SJ.short)}${s.minutes ? ` · ${s.minutes} min` : ""}</span><span class="chip">${st.countedJoker.has(s.id) ? "žolík, počítá se" : "navíc, nepočítá se"}</span>${link ? `<a class="chip" href="${esc(link)}" target="_blank" rel="noopener">${site} ↗</a>` : ""}` : "";
       const rs = Object.entries(reacts[s.id] || {}).map(([id, r]) => ({ id, ...r }));
-      const counts = {}; rs.forEach(r => { counts[r.emoji] = counts[r.emoji] || { n: 0, mine: false }; counts[r.emoji].n++; if (r.from === state.role) counts[r.emoji].mine = true; });
+      const counts = {}; rs.forEach(r => { counts[r.emoji] = counts[r.emoji] || { n: 0, mine: false }; counts[r.emoji].n++; if (isMine(r)) counts[r.emoji].mine = true; });
+      const who = rs.map(r => `${author(r)} ${r.emoji}`);
       return `<article class="card sess" data-sid="${s.id}">
         <div class="sess-head"><span class="d">${esc(fmtLong(s.date))}${s.planWeek ? ` <span class="muted small">· ${s.planWeek}. týden${s.day ? `, ${esc(s.day)}` : ""}</span>` : ""}</span>
           <span class="chips"><span class="chip pain-${Number(s.pain) || 0}">bolest ${Number(s.pain) || 0}</span><span class="chip">${swell[s.swelling] || swell[0]}</span>${s.mood !== null && s.mood !== undefined ? `<span class="chip">${moods[s.mood]}</span>` : ""}</span></div>
@@ -494,6 +507,7 @@
           ${["💪", "❤️", "🔥", "👏"].map(em => `<button type="button" class="react ${counts[em]?.mine ? "mine" : ""}" data-react="${em}" data-sid="${s.id}">${em}${counts[em] ? `<span class="c num">${counts[em].n}</span>` : ""}</button>`).join("")}
           ${!isPartner() ? `<button type="button" class="linkbtn" data-edit="${s.id}" style="margin-left:auto">Upravit</button><button type="button" class="linkbtn" data-del="${s.id}">Smazat</button>` : ""}
         </div>
+        ${who.length ? `<p class="small muted">${esc(who.join(" · "))}</p>` : ""}
       </article>`;
     }).join("")}</div></section>`;
   }
@@ -503,8 +517,8 @@
     const ms = messages();
     const st = stats();
     return `<section class="section">
-      <div><p class="eyebrow">Fandění · ${esc(isPartner() ? her() : him())}</p><h1>${isPartner() ? "Pošli povzbuzení" : "Vzkazy pro tebe"}</h1></div>
-      <div class="list" id="msg-list">${ms.length ? ms.map(m => `<div class="msg ${m.from}"><div>${esc(m.text)}</div><div class="meta">${esc(m.from === "partner" ? him() : her())} · ${fmtTime(m.createdAt)}</div></div>`).join("") : `<div class="empty">${isPartner() ? "Ještě nic. První zpráva je nejtěžší, zkus rychlou volbu níž." : "Zatím ticho. Pošli odkaz na appku parťákovi, ať může fandit."}</div>`}</div>
+      <div><p class="eyebrow">Fandění · ${esc(isPartner() ? her() : fans().join(", ") || him())}</p><h1>${isPartner() ? "Pošli povzbuzení" : "Vzkazy pro tebe"}</h1></div>
+      <div class="list" id="msg-list">${ms.length ? ms.map(m => `<div class="msg ${m.from}"><div>${esc(m.text)}</div><div class="meta">${esc(author(m))} · ${fmtTime(m.createdAt)}</div></div>`).join("") : `<div class="empty">${isPartner() ? "Ještě nic. První zpráva je nejtěžší, zkus rychlou volbu níž." : "Zatím ticho. Pošli odkaz na appku parťákovi, ať může fandit."}</div>`}</div>
     </section>
     <section class="section card composer">
       ${isPartner() ? `<div class="quick">${plan().cheers.map(c => `<button type="button" data-quick="${esc(c)}">${esc(c)}</button>`).join("")}${!st.trainedToday && st.thisWeekCount < st.goal ? `<button type="button" data-quick="Dneska by to šlo? Ještě ${st.goal - st.thisWeekCount} do splněného týdne. Věřím ti.">Popíchnout: ještě ${st.goal - st.thisWeekCount} do cíle</button>` : ""}</div>` : ""}
@@ -522,9 +536,8 @@
     const dbVer = dbPlan && dbPlan.version;
     return `<section class="section"><h1>Nastavení</h1></section>
     <section class="section card" style="display:grid;gap:14px">
-      <h2>Vy dva</h2>
+      <h2>Profil</h2>
       <div class="field"><label for="s-patient">Kdo cvičí (jméno)</label><input type="text" id="s-patient" value="${esc(p.patientName)}" placeholder="např. Jakub"></div>
-      <div class="field"><label for="s-partner">Kdo fandí (jméno)</label><input type="text" id="s-partner" value="${esc(p.partnerName)}" placeholder="např. Honza"></div>
       <div class="field"><label for="s-surgery">Začátek plánu</label><input type="date" id="s-surgery" value="${esc(p.surgeryDate)}" max="${todayISO()}"></div>
       <div class="field"><label for="s-goal">Cíl tréninků za týden</label><select id="s-goal">${[2, 3, 4, 5, 6, 7].map(n => `<option value="${n}" ${Number(p.weeklyGoal) === n ? "selected" : ""}>${n}× týdně</option>`).join("")}</select></div>
       <div class="field"><label for="s-week">Týden plánu</label><select id="s-week"><option value="0" ${!Number(p.planWeek) ? "selected" : ""}>Automaticky (teď ${st.weeksHit + 1 > P.weeks.length ? P.weeks.length : st.weeksHit + 1}. podle splněných týdnů)</option>${P.weeks.map(w => `<option value="${w.week}" ${Number(p.planWeek) === w.week ? "selected" : ""}>Týden ${w.week} · ${esc(w.title)}</option>`).join("")}</select>
@@ -546,9 +559,11 @@
     <section class="section card" style="display:grid;gap:12px">
       <h2>Tento telefon</h2>
       <div class="kv"><span>Role</span><div class="seg"><button type="button" data-setrole="patient" class="${state.role === "patient" ? "on" : ""}">Cvičím</button><button type="button" data-setrole="partner" class="${state.role === "partner" ? "on" : ""}">Fandím</button></div></div>
+      ${isPartner() ? `<div class="field"><label for="fan-name">Tvoje jméno (fanoušek)</label><div class="row"><input type="text" id="fan-name" maxlength="40" value="${esc(state.fanName)}" placeholder="např. Bára"><button class="btn btn-ghost" id="save-fan" type="button">Uložit</button></div>
+        <p class="small muted">Ukáže se u tvých vzkazů a reakcí. Každý fanoušek si ho nastaví na svém telefonu.</p></div>` : ""}
       <div class="kv"><span>Kód dvojice</span><code class="inline">${esc(pair)}</code></div>
       ${store.mode === "cloud"
-        ? `<p class="small muted">Pošli parťákovi tento odkaz. Otevře stejná data a zvolí si roli „Fandím“.</p>
+        ? `<p class="small muted">Pošli tento odkaz fanouškům. Otevřou stejná data, zvolí si roli „Fandím“ a své jméno. Fanoušků může být víc.</p>
            <div class="row"><input type="text" id="s-link" readonly value="${esc(link)}"><button class="btn btn-ghost" id="copy-link" type="button">Kopírovat</button></div>`
         : `<div class="note">Data se ukládají jen v tomto prohlížeči, parťák je neuvidí. Sdílení zapneš vyplněním <code class="inline">js/firebase-config.js</code> podle README (asi 5 minut).</div>`}
     </section>
@@ -692,6 +707,7 @@
 
     view.querySelectorAll("[data-quick]").forEach(b => b.onclick = () => { $("#f-msg").value = b.dataset.quick; $("#f-msg").focus(); });
     const send = $("#send-msg"); if (send) send.onclick = sendMessage;
+    const sf = $("#save-fan"); if (sf) sf.onclick = () => { state.fanName = $("#fan-name").value.trim().slice(0, 40); LS.set("fanName", state.fanName); render(); toast(state.fanName ? `Fandíš jako ${state.fanName}` : "Jméno smazáno"); };
 
     const sp = $("#save-profile"); if (sp) sp.onclick = saveProfile;
     const up = $("#upload-plan"); if (up) up.onclick = uploadPlan;
@@ -736,21 +752,21 @@
   }
 
   async function toggleReaction(sid, emoji) {
-    const existing = Object.entries(state.data.reactions?.[sid] || {}).find(([, r]) => r.emoji === emoji && r.from === state.role);
+    const existing = Object.entries(state.data.reactions?.[sid] || {}).find(([, r]) => r.emoji === emoji && isMine(r));
     if (existing) await store.remove(`${BASE}/reactions/${sid}/${existing[0]}`);
-    else await store.push(`${BASE}/reactions/${sid}`, { emoji, from: state.role, createdAt: Date.now() });
+    else await store.push(`${BASE}/reactions/${sid}`, { emoji, from: state.role, ...signed(), createdAt: Date.now() });
   }
 
   async function sendMessage() {
     const ta = $("#f-msg"); const text = ta.value.trim(); if (!text) return;
-    await store.push(`${BASE}/messages`, { text, from: state.role, createdAt: Date.now() });
+    await store.push(`${BASE}/messages`, { text, from: state.role, ...signed(), createdAt: Date.now() });
     ta.value = ""; toast("Odesláno");
     state.lastSeenMsg = Date.now(); LS.set("lastSeenMsg", state.lastSeenMsg);
   }
 
   async function saveProfile() {
     await store.update(`${BASE}/profile`, {
-      patientName: $("#s-patient").value.trim(), partnerName: $("#s-partner").value.trim(),
+      patientName: $("#s-patient").value.trim(),
       surgeryDate: $("#s-surgery").value || "", weeklyGoal: Number($("#s-goal").value) || plan().weeklyGoal,
       planWeek: Number($("#s-week").value) || 0
     });
